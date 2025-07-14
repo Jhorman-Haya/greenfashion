@@ -98,6 +98,7 @@ includes/components/
 ├── header.php         # Encabezado común
 ├── footer.php         # Pie de página
 └── navbar.php         # Navegación
+```
 
 ---
 
