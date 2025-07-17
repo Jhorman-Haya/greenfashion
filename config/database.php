@@ -5,7 +5,7 @@ function connection() {
     $password = "";
     $database = "greenfashion";
 
-    $connect = mysqli_connect($server, $user, $database, $password);
+    $connect = mysqli_connect($server, $user, $password, $database);
 
     return $connect;
 }
