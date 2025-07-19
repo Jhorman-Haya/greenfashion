@@ -1,0 +1,271 @@
+:root {
+  /* Colores principales de la marca */
+  --verde-natural: #2E7D32;
+  --blanco-puro: #FFFFFF;
+  --beige-natural: #F5F5DC;
+  --gris-claro: #F0F0F0;
+  --verde-oscuro: #1B5E20;
+
+  /* Colores secundarios para la interfaz administrativa */
+  --gris-texto: #333333;
+  --gris-borde: #DDDDDD;
+  --rojo-error: #D32F2F;
+  --verde-exito: #4CAF50;
+  --azul-info: #2196F3;
+  --amarillo-advertencia: #FFC107;
+}
+
+.users-table {
+  width: 70%;
+  border-collapse: collapse;
+  margin: 0 auto;
+}
+
+.users-table th,
+.users-table td {
+  border: 1px solid var(--gris-borde);
+  padding: 12px;
+  text-align: left;
+}
+
+.users-table th {
+  background-color: var(--verde-natural);
+  color: var(--blanco-puro);
+  font-weight: bold;
+}
+
+.users-table td {
+  background-color: var(--blanco-puro);
+}
+
+.users-table td:last-child {
+  text-align: center;
+}
+
+/* Estilos para los botones */
+.btn-delete, .btn-edit {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    color: var(--blanco-puro);
+    cursor: pointer;
+    margin: 0 4px;
+    font-weight: bold;
+}
+
+.btn-delete {
+    background-color: var(--rojo-error);
+}
+
+.btn-edit {
+    background-color: var(--azul-info);
+}
+
+.btn-delete:hover, .btn-edit:hover {
+    opacity: 0.9;
+}
+
+/* Estilos para el indicador de usuario actual */
+.usuario-actual {
+    display: inline-block;
+    padding: 4px 8px;
+    background-color: var(--verde-natural);
+    color: var(--blanco-puro);
+    border-radius: 4px;
+    font-size: 0.9em;
+    margin-left: 8px;
+}
+
+/* Estilos para el header y cerrar sesión */
+.header-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 0 20px;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.btn-logout {
+    background-color: var(--rojo-error);
+    color: var(--blanco-puro);
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: opacity 0.3s ease;
+}
+
+.btn-logout:hover {
+    opacity: 0.9;
+}
+
+/* Estilos para el modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: var(--blanco-puro);
+    margin: 8% auto;
+    padding: 30px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.modal-content h2 {
+    color: var(--verde-natural);
+    margin-bottom: 25px;
+    font-size: 1.5em;
+}
+
+.close {
+    position: absolute;
+    right: 20px;
+    top: 10px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: var(--gris-texto);
+}
+
+.close:hover {
+    color: var(--rojo-error);
+}
+
+/* Estilos para el formulario dentro del modal */
+.modal .form-group {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.modal .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--gris-texto);
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.modal .form-group input,
+.modal .form-group select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--gris-borde);
+    border-radius: 6px;
+    font-size: 1em;
+    transition: all 0.3s ease;
+    background-color: var(--blanco-puro);
+    box-sizing: border-box;
+    height: 48px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* Estilo específico para el select */
+.modal .form-group select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333333' d='M6 8.825L1.175 4 2.238 2.938 6 6.7l3.763-3.763L10.825 4z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    padding-right: 48px; /* Espacio para la flecha */
+    cursor: pointer;
+}
+
+.modal .form-group select::-ms-expand {
+    display: none;
+}
+
+.modal .form-group input:hover,
+.modal .form-group select:hover {
+    border-color: var(--verde-natural);
+}
+
+.modal .form-group input:focus,
+.modal .form-group select:focus {
+    border-color: var(--verde-natural);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.15);
+}
+
+.modal .form-group input:invalid,
+.modal .form-group select:invalid {
+    border-color: var(--rojo-error);
+}
+
+.modal .form-group input:invalid:focus,
+.modal .form-group select:invalid:focus {
+    box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.15);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.form-actions button {
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.95em;
+    transition: all 0.3s ease;
+}
+
+.btn-edit {
+    background-color: var(--verde-natural);
+}
+
+.btn-edit:hover {
+    background-color: var(--verde-oscuro);
+    transform: translateY(-1px);
+}
+
+.btn-cancel {
+    padding: 12px 24px;
+    border: 2px solid var(--gris-borde);
+    border-radius: 6px;
+    background-color: var(--blanco-puro);
+    color: var(--gris-texto);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-cancel:hover {
+    background-color: var(--gris-claro);
+    border-color: var(--gris-texto);
+}
+
+/* Mejoras responsivas */
+@media (max-width: 600px) {
+    .modal-content {
+        margin: 15px;
+        padding: 20px;
+        width: auto;
+        max-width: none;
+    }
+
+    .form-actions {
+        flex-direction: column-reverse;
+    }
+
+    .form-actions button {
+        width: 100%;
+    }
+}
