@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Círculo principal -->
+    <circle cx="30" cy="30" r="25" fill="#2E7D32"/>
+    
+    <!-- Signo más -->
+    <rect x="27" y="18" width="6" height="24" fill="white"/>
+    <rect x="18" y="27" width="24" height="6" fill="white"/>
+</svg> 
