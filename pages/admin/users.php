@@ -285,9 +285,6 @@ if (isset($_GET['get_user'])) {
                     <table class="users-table">
                         <thead>
                             <tr>
-                                <th>
-                                    <input type="checkbox" id="selectAll">
-                                </th>
                                 <th>Usuario</th>
                                 <th>Email</th>
                                 <th>Rol</th>
@@ -301,9 +298,6 @@ if (isset($_GET['get_user'])) {
                                 <?php while ($user = mysqli_fetch_assoc($usuarios)): ?>
                                     <tr>
                                         <td>
-                                            <input type="checkbox" value="<?php echo $user['id']; ?>">
-                                        </td>
-                                        <td>
                                             <div class="user-info">
                                                 <div class="user-avatar-table">
                                                     <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($user['nombre']); ?>&background=2E7D32&color=fff" 
@@ -311,7 +305,6 @@ if (isset($_GET['get_user'])) {
                                                 </div>
                                                 <div class="user-details">
                                                     <h4><?php echo htmlspecialchars($user['nombre']); ?></h4>
-                                                    <p>@<?php echo strtolower(str_replace(' ', '', $user['nombre'])); ?></p>
                                                 </div>
                                             </div>
                                         </td>
@@ -341,7 +334,7 @@ if (isset($_GET['get_user'])) {
                                 <?php endwhile; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="7" class="no-results">
+                                    <td colspan="6" class="no-results">
                                         <div class="no-results-content">
                                             <span class="material-icons">search_off</span>
                                             <h3>No se encontraron usuarios</h3>
@@ -398,44 +391,62 @@ if (isset($_GET['get_user'])) {
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title" id="modalTitle">Añadir Usuario</h2>
-                <span class="close" onclick="closeModal()">&times;</span>
+                <button class="close" onclick="closeModal()" type="button">
+                    <span class="material-icons">close</span>
+                </button>
             </div>
             
             <form id="userForm" method="POST">
-                <input type="hidden" name="action" id="formAction" value="create">
-                <input type="hidden" name="id" id="userId">
-                
-                <div class="form-group">
-                    <label class="form-label" for="nombre">Nombre Completo</label>
-                    <input type="text" class="form-input" id="nombre" name="nombre" required>
+                <div class="modal-body">
+                    <input type="hidden" name="action" id="formAction" value="create">
+                    <input type="hidden" name="id" id="userId">
+                    
+                    <div class="form-group full-width">
+                        <label class="form-label" for="nombre">Nombre Completo</label>
+                        <input type="text" class="form-input" id="nombre" name="nombre" 
+                               placeholder="Ingresa el nombre completo" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="email">Correo Electrónico</label>
+                            <input type="email" class="form-input" id="email" name="email" 
+                                   placeholder="usuario@email.com" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="telefono">Teléfono</label>
+                            <input type="tel" class="form-input" id="telefono" name="telefono" 
+                                   placeholder="+34 123 456 789">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" id="passwordGroup">
+                            <label class="form-label" for="password">Contraseña</label>
+                            <input type="password" class="form-input" id="password" name="password" 
+                                   placeholder="Mínimo 6 caracteres">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="rol">Rol del Usuario</label>
+                            <select class="form-select" id="rol" name="rol" required>
+                                <option value="">Seleccionar rol</option>
+                                <option value="cliente">Cliente</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="email">Correo Electrónico</label>
-                    <input type="email" class="form-input" id="email" name="email" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="telefono">Teléfono</label>
-                    <input type="tel" class="form-input" id="telefono" name="telefono">
-                </div>
-
-                <div class="form-group" id="passwordGroup">
-                    <label class="form-label" for="password">Contraseña</label>
-                    <input type="password" class="form-input" id="password" name="password">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="rol">Rol</label>
-                    <select class="form-select" id="rol" name="rol" required>
-                        <option value="cliente">Cliente</option>
-                        <option value="admin">Administrador</option>
-                    </select>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="submitBtn">Crear Usuario</button>
+                <div class="form-footer">
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <span class="material-icons">person_add</span>
+                            Crear Usuario
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -453,7 +464,7 @@ if (isset($_GET['get_user'])) {
         function openCreateModal() {
             document.getElementById('modalTitle').textContent = 'Añadir Usuario';
             document.getElementById('formAction').value = 'create';
-            document.getElementById('submitBtn').textContent = 'Crear Usuario';
+            document.getElementById('submitBtn').innerHTML = '<span class="material-icons">person_add</span> Crear Usuario';
             document.getElementById('passwordGroup').style.display = 'block';
             document.getElementById('password').required = true;
             modal.style.display = 'block';
@@ -466,7 +477,7 @@ if (isset($_GET['get_user'])) {
 
                 document.getElementById('modalTitle').textContent = 'Editar Usuario';
                 document.getElementById('formAction').value = 'update';
-                document.getElementById('submitBtn').textContent = 'Actualizar Usuario';
+                document.getElementById('submitBtn').innerHTML = '<span class="material-icons">save</span> Actualizar Usuario';
                 document.getElementById('passwordGroup').style.display = 'none';
                 document.getElementById('password').required = false;
                 
@@ -547,11 +558,7 @@ if (isset($_GET['get_user'])) {
             }
         }
 
-        // Seleccionar todos los checkboxes
-        document.getElementById('selectAll').addEventListener('change', function() {
-            const checkboxes = document.querySelectorAll('tbody input[type="checkbox"]');
-            checkboxes.forEach(cb => cb.checked = this.checked);
-        });
+
     </script>
 </body>
 </html>
