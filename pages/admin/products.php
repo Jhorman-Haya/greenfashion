@@ -119,7 +119,7 @@ $total_pages = ceil($total_products / $limit);
                                 <?php while ($product = mysqli_fetch_assoc($productos)): ?>
                                     <tr>
                                         <td>
-                                            <div class="product-info">
+                                            <div class="product-info" onclick="viewProduct(<?php echo $product['id']; ?>)" style="cursor: pointer;">
                                                 <div class="product-image">
                                                     <?php if ($product['imagen_principal']): ?>
                                                         <img src="../../<?php echo htmlspecialchars($product['imagen_principal']); ?>" 
@@ -158,6 +158,9 @@ $total_pages = ceil($total_products / $limit);
                                         <td><?php echo date('d/m/Y', strtotime($product['fecha_creacion'])); ?></td>
                                         <td>
                                             <div class="action-buttons">
+                                                <button class="btn-action btn-view" onclick="viewProduct(<?php echo $product['id']; ?>)" title="Ver Detalle">
+                                                    <span class="material-icons">visibility</span>
+                                                </button>
                                                 <button class="btn-action btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)" title="Editar">
                                                     <span class="material-icons">edit</span>
                                                 </button>
@@ -219,6 +222,79 @@ $total_pages = ceil($total_products / $limit);
                     </div>
                 </div>
             </div>
+
+            <!-- Modal de Detalle -->
+            <div id="viewModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 id="viewModalTitle">
+                            <span class="material-icons">visibility</span>
+                            Detalle del Producto
+                        </h2>
+                        <button class="close" onclick="closeViewModal()">
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="product-detail">
+                            <!-- Galería de imágenes -->
+                            <div class="product-gallery">
+                                <div id="mainImage" class="main-image"></div>
+                                <div id="thumbnails" class="thumbnails"></div>
+                            </div>
+
+                            <!-- Información del producto -->
+                            <div class="product-info-detail">
+                                <h3 id="productName"></h3>
+                                <div class="price-stock">
+                                    <div class="detail-price">
+                                        <span class="label">Precio:</span>
+                                        <span id="productPrice" class="price"></span>
+                                    </div>
+                                    <div class="detail-stock">
+                                        <span class="label">Stock:</span>
+                                        <span id="productStock" class="stock-badge"></span>
+                                    </div>
+                                </div>
+
+                                <div class="detail-section">
+                                    <h4>Descripción</h4>
+                                    <p id="productDescription"></p>
+                                </div>
+
+                                <div class="detail-section">
+                                    <h4>Categorías</h4>
+                                    <div id="productCategories" class="categories-list"></div>
+                                </div>
+
+                                <div class="detail-section">
+                                    <h4>Materiales</h4>
+                                    <p id="productMaterials"></p>
+                                </div>
+
+                                <div class="detail-section">
+                                    <h4>Impacto Ambiental</h4>
+                                    <p id="productImpact"></p>
+                                </div>
+
+                                <div class="detail-section">
+                                    <h4>Información Adicional</h4>
+                                    <div class="detail-grid">
+                                        <div class="detail-item">
+                                            <span class="label">Estado:</span>
+                                            <span id="productStatus" class="status-badge"></span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <span class="label">Fecha de Creación:</span>
+                                            <span id="productDate"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -241,6 +317,99 @@ $total_pages = ceil($total_products / $limit);
                 searchProducts(this.value);
             }
         });
+
+        // Modal de detalle
+        const viewModal = document.getElementById('viewModal');
+        
+        function closeViewModal() {
+            viewModal.style.display = 'none';
+        }
+
+        async function viewProduct(id) {
+            try {
+                const response = await fetch(`get_product.php?id=${id}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const product = result.data;
+                    
+                    // Actualizar información básica
+                    document.getElementById('productName').textContent = product.nombre;
+                    document.getElementById('productPrice').textContent = `$${parseFloat(product.precio).toFixed(2)}`;
+                    document.getElementById('productStock').textContent = `${product.stock} unidades`;
+                    document.getElementById('productStock').className = `stock-badge ${product.stock > 0 ? 'stock-available' : 'stock-empty'}`;
+                    document.getElementById('productDescription').textContent = product.descripcion;
+                    document.getElementById('productMaterials').textContent = product.materiales;
+                    document.getElementById('productImpact').textContent = product.impacto_ambiental;
+                    document.getElementById('productStatus').textContent = product.activo ? 'Activo' : 'Inactivo';
+                    document.getElementById('productStatus').className = `status-badge status-${product.activo ? 'activo' : 'inactivo'}`;
+                    document.getElementById('productDate').textContent = new Date(product.fecha_creacion).toLocaleDateString();
+                    
+                    // Actualizar categorías
+                    const categoriesContainer = document.getElementById('productCategories');
+                    categoriesContainer.innerHTML = '';
+                    if (product.categorias) {
+                        product.categorias.split(',').forEach(categoria => {
+                            const badge = document.createElement('span');
+                            badge.className = 'category-badge';
+                            badge.textContent = categoria.trim();
+                            categoriesContainer.appendChild(badge);
+                        });
+                    } else {
+                        categoriesContainer.innerHTML = '<span class="text-muted">Sin categoría</span>';
+                    }
+                    
+                    // Actualizar galería de imágenes
+                    const mainImage = document.getElementById('mainImage');
+                    const thumbnails = document.getElementById('thumbnails');
+                    mainImage.innerHTML = '';
+                    thumbnails.innerHTML = '';
+                    
+                    if (product.imagenes && product.imagenes.length > 0) {
+                        // Imagen principal
+                        const principalImage = product.imagenes.find(img => img.principal == 1) || product.imagenes[0];
+                        const mainImg = document.createElement('img');
+                        mainImg.src = `../../${principalImage.url}`;
+                        mainImg.alt = product.nombre;
+                        mainImage.appendChild(mainImg);
+                        
+                        // Miniaturas
+                        product.imagenes.forEach(img => {
+                            const thumb = document.createElement('div');
+                            thumb.className = `thumbnail ${img.principal == 1 ? 'active' : ''}`;
+                            thumb.innerHTML = `<img src="../../${img.url}" alt="${product.nombre}">`;
+                            thumb.onclick = () => {
+                                mainImg.src = `../../${img.url}`;
+                                document.querySelectorAll('.thumbnail').forEach(t => t.classList.remove('active'));
+                                thumb.classList.add('active');
+                            };
+                            thumbnails.appendChild(thumb);
+                        });
+                    } else {
+                        mainImage.innerHTML = `
+                            <div class="no-image">
+                                <span class="material-icons">image_not_available</span>
+                                <p>No hay imágenes disponibles</p>
+                            </div>
+                        `;
+                    }
+                    
+                    viewModal.style.display = 'block';
+                } else {
+                    alert('Error al cargar el producto');
+                }
+            } catch (error) {
+                alert('Error al cargar el producto');
+                console.error('Error:', error);
+            }
+        }
+
+        // Cerrar modal al hacer clic fuera
+        window.onclick = function(event) {
+            if (event.target === viewModal) {
+                closeViewModal();
+            }
+        }
     </script>
 </body>
 </html> 
