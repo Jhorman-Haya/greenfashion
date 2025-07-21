@@ -404,6 +404,60 @@ $total_pages = ceil($total_products / $limit);
             }
         }
 
+        async function editProduct(id) {
+            try {
+                const response = await fetch(`get_product.php?id=${id}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const product = result.data;
+                    
+                    // Actualizar título y acción del modal
+                    document.getElementById('modalTitle').innerHTML = '<span class="material-icons">edit</span> Editar Producto';
+                    document.getElementById('formAction').value = 'update';
+                    document.getElementById('submitBtn').innerHTML = '<span class="material-icons">save</span> Actualizar Producto';
+                    
+                    // Llenar campos del formulario
+                    document.getElementById('productId').value = product.id;
+                    document.getElementById('nombre').value = product.nombre;
+                    document.getElementById('descripcion').value = product.descripcion;
+                    document.getElementById('precio').value = product.precio;
+                    document.getElementById('stock').value = product.stock;
+                    document.getElementById('materiales').value = product.materiales || '';
+                    document.getElementById('impacto_ambiental').value = product.impacto_ambiental || '';
+                    document.getElementById('activo').checked = product.activo == 1;
+
+                    // Marcar categorías
+                    const categorias = product.categorias ? product.categorias.split(',') : [];
+                    document.querySelectorAll('input[name="categorias[]"]').forEach(checkbox => {
+                        checkbox.checked = categorias.includes(checkbox.value.trim());
+                    });
+
+                    // Cargar imágenes existentes
+                    currentImages = [];
+                    if (product.imagenes && product.imagenes.length > 0) {
+                        currentImages = product.imagenes.map(imagen => ({
+                            id: imagen.id,
+                            filename: imagen.url.split('/').pop(),
+                            original_name: imagen.url.split('/').pop(),
+                            is_principal: imagen.principal == 1,
+                            is_existing: true,
+                            url: imagen.url
+                        }));
+                    }
+                    updateImageDisplay();
+
+                    // Mostrar modal
+                    document.getElementById('productModal').style.display = 'block';
+                } else {
+                    alert('Error al cargar los datos del producto');
+                }
+            } catch (error) {
+                alert('Error al cargar los datos del producto');
+                console.error('Error:', error);
+            }
+        }
+
         // Cerrar modal al hacer clic fuera
         window.onclick = function(event) {
             if (event.target === viewModal) {
