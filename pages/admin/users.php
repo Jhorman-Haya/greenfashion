@@ -192,7 +192,7 @@ if (isset($_GET['get_user'])) {
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="#" class="nav-link">
+                            <a href="products.php" class="nav-link">
                                 <span class="material-icons">inventory_2</span>
                                 Productos
                             </a>
@@ -262,11 +262,55 @@ if (isset($_GET['get_user'])) {
                         <span class="material-icons">add</span>
                         Añadir Usuario
                     </button>
-                    <div class="user-menu">
+                    <div class="user-menu" onclick="toggleUserDropdown()">
                         <div class="user-avatar">
                             <?php echo strtoupper(substr($_SESSION['nombre'], 0, 1)); ?>
                         </div>
-                        <span class="material-icons">keyboard_arrow_down</span>
+                        <div class="user-info-dropdown">
+                            <span class="user-name"><?php echo htmlspecialchars($_SESSION['nombre']); ?></span>
+                            <span class="user-role"><?php echo ucfirst($_SESSION['rol']); ?></span>
+                        </div>
+                        <span class="material-icons dropdown-arrow">keyboard_arrow_down</span>
+                        
+                        <div id="userDropdown" class="user-dropdown">
+                            <div class="dropdown-header">
+                                <div class="user-avatar-large">
+                                    <?php echo strtoupper(substr($_SESSION['nombre'], 0, 1)); ?>
+                                </div>
+                                <div class="user-details-dropdown">
+                                    <h4><?php echo htmlspecialchars($_SESSION['nombre']); ?></h4>
+                                    <p><?php echo htmlspecialchars($_SESSION['email'] ?? 'No email'); ?></p>
+                                </div>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a href="#" class="dropdown-item" onclick="openProfileModal()">
+                                        <span class="material-icons">person</span>
+                                        Mi Perfil
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#" class="dropdown-item" onclick="openPasswordModal()">
+                                        <span class="material-icons">lock</span>
+                                        Cambiar Contraseña
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="#" class="dropdown-item">
+                                        <span class="material-icons">settings</span>
+                                        Configuración
+                                    </a>
+                                </li>
+                                <li class="dropdown-divider"></li>
+                                <li>
+                                    <a href="../logout.php" class="dropdown-item logout">
+                                        <span class="material-icons">logout</span>
+                                        Cerrar Sesión
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -556,6 +600,49 @@ if (isset($_GET['get_user'])) {
             if (event.target === modal) {
                 closeModal();
             }
+        }
+
+        // Funcionalidad del dropdown de usuario
+        function toggleUserDropdown() {
+            const dropdown = document.getElementById('userDropdown');
+            const arrow = document.querySelector('.dropdown-arrow');
+            
+            if (dropdown.style.display === 'block') {
+                dropdown.style.display = 'none';
+                arrow.style.transform = 'rotate(0deg)';
+            } else {
+                dropdown.style.display = 'block';
+                arrow.style.transform = 'rotate(180deg)';
+            }
+        }
+
+        // Cerrar dropdown al hacer clic fuera
+        document.addEventListener('click', function(event) {
+            const userMenu = document.querySelector('.user-menu');
+            const dropdown = document.getElementById('userDropdown');
+            
+            if (!userMenu.contains(event.target)) {
+                dropdown.style.display = 'none';
+                document.querySelector('.dropdown-arrow').style.transform = 'rotate(0deg)';
+            }
+        });
+
+        // Prevenir que el clic en dropdown items cierre el dropdown inmediatamente
+        document.getElementById('userDropdown').addEventListener('click', function(event) {
+            event.stopPropagation();
+        });
+
+        // Funciones para los modales del perfil y contraseña
+        function openProfileModal() {
+            alert('Funcionalidad de perfil - Por implementar');
+            document.getElementById('userDropdown').style.display = 'none';
+            document.querySelector('.dropdown-arrow').style.transform = 'rotate(0deg)';
+        }
+
+        function openPasswordModal() {
+            alert('Funcionalidad para cambiar contraseña - Por implementar');
+            document.getElementById('userDropdown').style.display = 'none';
+            document.querySelector('.dropdown-arrow').style.transform = 'rotate(0deg)';
         }
 
 

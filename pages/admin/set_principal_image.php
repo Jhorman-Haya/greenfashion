@@ -2,13 +2,21 @@
 require_once '../../config/database.php';
 session_start();
 
+// Verificar que sea una petición POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'error' => 'Método no permitido']);
+    exit();
+}
+
+// Verificar autenticación y rol
 if (!isset($_SESSION['user_id']) || $_SESSION['rol'] !== 'admin') {
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'error' => 'No autorizado']);
     exit();
 }
 
-// Obtener datos del request
+// Obtener datos del body
 $data = json_decode(file_get_contents('php://input'), true);
 
 if (!isset($data['image_id']) || !isset($data['product_id'])) {
@@ -17,38 +25,35 @@ if (!isset($data['image_id']) || !isset($data['product_id'])) {
     exit();
 }
 
-$conn = connection();
 $image_id = filter_var($data['image_id'], FILTER_SANITIZE_NUMBER_INT);
 $product_id = filter_var($data['product_id'], FILTER_SANITIZE_NUMBER_INT);
 
-// Verificar que la imagen pertenezca al producto
-$check_sql = "SELECT COUNT(*) as count FROM imagenes_producto WHERE id = ? AND producto_id = ?";
-$check_stmt = mysqli_prepare($conn, $check_sql);
-mysqli_stmt_bind_param($check_stmt, "ii", $image_id, $product_id);
-mysqli_stmt_execute($check_stmt);
-$check_result = mysqli_stmt_get_result($check_stmt);
+$conn = connection();
 
-if (mysqli_fetch_assoc($check_result)['count'] === 0) {
+try {
+    // 1. Quitar el estado principal de todas las imágenes del producto
+    $remove_principal_sql = "UPDATE imagenes_producto SET principal = 0 WHERE producto_id = ?";
+    $remove_stmt = mysqli_prepare($conn, $remove_principal_sql);
+    mysqli_stmt_bind_param($remove_stmt, "i", $product_id);
+    
+    if (mysqli_stmt_execute($remove_stmt)) {
+        // 2. Establecer la nueva imagen como principal
+        $set_principal_sql = "UPDATE imagenes_producto SET principal = 1 WHERE id = ? AND producto_id = ?";
+        $set_stmt = mysqli_prepare($conn, $set_principal_sql);
+        mysqli_stmt_bind_param($set_stmt, "ii", $image_id, $product_id);
+        
+        if (mysqli_stmt_execute($set_stmt)) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true]);
+        } else {
+            throw new Exception("Error al establecer la nueva imagen principal");
+        }
+    } else {
+        throw new Exception("Error al quitar el estado principal de las imágenes existentes");
+    }
+} catch (Exception $e) {
     header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => 'La imagen no pertenece al producto']);
-    exit();
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
 
-// Quitar principal de todas las imágenes del producto
-$update_all_sql = "UPDATE imagenes_producto SET principal = 0 WHERE producto_id = ?";
-$update_all_stmt = mysqli_prepare($conn, $update_all_sql);
-mysqli_stmt_bind_param($update_all_stmt, "i", $product_id);
-mysqli_stmt_execute($update_all_stmt);
-
-// Establecer la nueva imagen principal
-$update_sql = "UPDATE imagenes_producto SET principal = 1 WHERE id = ? AND producto_id = ?";
-$update_stmt = mysqli_prepare($conn, $update_sql);
-mysqli_stmt_bind_param($update_stmt, "ii", $image_id, $product_id);
-
-if (mysqli_stmt_execute($update_stmt)) {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => true]);
-} else {
-    header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'error' => 'Error al actualizar la imagen principal']);
-}
+mysqli_close($conn);
