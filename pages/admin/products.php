@@ -9,6 +9,35 @@ if (!isset($_SESSION['user_id']) || $_SESSION['rol'] !== 'admin') {
 
 $conn = connection();
 
+function sanitizeInput($data) {
+    return htmlspecialchars(strip_tags(trim($data)));
+}
+
+// Procesar formularios
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['action'])) {
+        switch ($_POST['action']) {
+            case 'delete':
+                $id = filter_var($_POST['id'], FILTER_SANITIZE_NUMBER_INT);
+
+                // Marcar producto como inactivo (soft delete)
+                $sql = "UPDATE productos SET activo = FALSE WHERE id = ?";
+                $stmt = mysqli_prepare($conn, $sql);
+                mysqli_stmt_bind_param($stmt, "i", $id);
+                
+                if (mysqli_stmt_execute($stmt)) {
+                    // Redirigir para evitar reenvío del formulario
+                    header('Location: products.php?success=deleted');
+                    exit();
+                } else {
+                    $mensaje = "Error al eliminar producto";
+                    $tipo_mensaje = "error";
+                }
+                break;
+        }
+    }
+}
+
 // Obtener productos con paginación y búsqueda
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
@@ -455,6 +484,20 @@ $total_pages = ceil($total_products / $limit);
             } catch (error) {
                 alert('Error al cargar los datos del producto');
                 console.error('Error:', error);
+            }
+        }
+
+        // Función para eliminar producto
+        function deleteProduct(id) {
+            if (confirm('¿Estás seguro de que deseas eliminar este producto?')) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.innerHTML = `
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="id" value="${id}">
+                `;
+                document.body.appendChild(form);
+                form.submit();
             }
         }
 
