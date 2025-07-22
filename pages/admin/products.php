@@ -34,7 +34,6 @@ if (isset($_GET['success'])) {
     }
 }
 
-// Procesar formularios
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
@@ -56,64 +55,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (mysqli_stmt_execute($stmt)) {
                     $producto_id = mysqli_insert_id($conn);
 
-                    // Procesar imágenes temporales
-                    if (isset($_SESSION['temp_images']) && !empty($_SESSION['temp_images'])) {
+                    // Procesar imágenes temporales si existen
+                    if (isset($_POST['temp_images']) && !empty($_POST['temp_images'])) {
+                        // Crear directorio del producto
                         $upload_dir = '../../uploads/products/' . $producto_id . '/';
                         
                         // Crear directorio si no existe
                         if (!file_exists($upload_dir)) {
-                            mkdir($upload_dir, 0777, true);
+                            if (!mkdir($upload_dir, 0777, true)) {
+                                $mensaje = "Error al crear directorio de imágenes";
+                                $tipo_mensaje = "error";
+                                break;
+                            }
                         }
 
-                        // Verificar si ya existe una imagen principal
-                        $check_principal_sql = "SELECT COUNT(*) as count FROM imagenes_producto WHERE producto_id = ? AND principal = 1";
-                        $check_stmt = mysqli_prepare($conn, $check_principal_sql);
-                        mysqli_stmt_bind_param($check_stmt, "i", $producto_id);
-                        mysqli_stmt_execute($check_stmt);
-                        $check_result = mysqli_stmt_get_result($check_stmt);
-                        $has_principal = mysqli_fetch_assoc($check_result)['count'] > 0;
-
                         // Si no hay principal, la primera imagen será principal
-                        $first_image = true;
+                        foreach ($_POST['temp_images'] as $image) {
+                            // Verificar datos requeridos
+                            if (empty($image['temp_path']) || empty($image['filename'])) {
+                                continue;
+                            }
 
-                        foreach ($_SESSION['temp_images'] as $image) {
                             $temp_path = $image['temp_path'];
                             $filename = $image['filename'];
+                            $is_principal = isset($image['is_principal']) && $image['is_principal'] === '1';
                             
-                            if (file_exists($temp_path)) {
-                                $final_path = $upload_dir . $filename;
+                            // Verificar que el archivo temporal existe
+                            if (!file_exists($temp_path)) {
+                                $mensaje = "Archivo temporal no encontrado: " . $filename;
+                                $tipo_mensaje = "error";
+                                continue;
+                            }
+                            
+                            // Mover imagen a ubicación final
+                            $final_path = $upload_dir . $filename;
+                            if (!rename($temp_path, $final_path)) {
+                                $mensaje = "Error al mover imagen: " . $filename;
+                                $tipo_mensaje = "error";
+                                continue;
+                            }
+
+                            // Guardar en base de datos
+                            $relative_path = 'uploads/products/' . $producto_id . '/' . $filename;
+                            $img_sql = "INSERT INTO imagenes_producto (producto_id, url, principal) VALUES (?, ?, ?)";
+                            $img_stmt = mysqli_prepare($conn, $img_sql);
+                            
+                            if ($img_stmt) {
+                                $principal_value = $is_principal ? 1 : 0;
+                                mysqli_stmt_bind_param($img_stmt, "isi", $producto_id, $relative_path, $principal_value);
                                 
-                                if (rename($temp_path, $final_path)) {
-                                    // Determinar si esta imagen será principal
-                                    $is_principal = (!$has_principal && $first_image) ? 1 : 0;
-                                    
-                                    // Guardar referencia en la base de datos
-                                    $img_sql = "INSERT INTO imagenes_producto (producto_id, url, principal) VALUES (?, ?, ?)";
-                                    $img_stmt = mysqli_prepare($conn, $img_sql);
-                                    $relative_path = 'uploads/products/' . $producto_id . '/' . $filename;
-                                    mysqli_stmt_bind_param($img_stmt, "isi", $producto_id, $relative_path, $is_principal);
-                                    
-                                    if (mysqli_stmt_execute($img_stmt)) {
-                                        if ($is_principal) {
-                                            $has_principal = true; // Ya tenemos una principal
-                                        }
-                                    } else {
-                                        $mensaje = "Error al guardar la referencia de la imagen en la base de datos";
-                                        $tipo_mensaje = "error";
-                                    }
-                                } else {
-                                    $mensaje = "Error al mover la imagen a su ubicación final";
+                                if (!mysqli_stmt_execute($img_stmt)) {
+                                    $mensaje = "Error al guardar imagen en BD: " . mysqli_error($conn);
                                     $tipo_mensaje = "error";
                                 }
                             }
-                            
-                            $first_image = false; // Ya no es la primera imagen
                         }
 
-                        // Limpiar directorio temporal y sesión
-                        array_map('unlink', glob('../../uploads/temp/' . session_id() . '/*.*'));
-                        rmdir('../../uploads/temp/' . session_id());
-                        unset($_SESSION['temp_images']);
+                        // Limpiar directorio temporal
+                        $temp_dir = '../../uploads/temp/' . session_id() . '/';
+                        if (file_exists($temp_dir)) {
+                            array_map('unlink', glob($temp_dir . '*.*'));
+                            rmdir($temp_dir);
+                        }
                     }
                     
                     // Insertar categorías del producto
@@ -218,55 +221,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     // Procesar nuevas imágenes temporales si existen
-                    if (isset($_SESSION['temp_images']) && !empty($_SESSION['temp_images'])) {
+                    if (isset($_POST['temp_images']) && !empty($_POST['temp_images'])) {
                         $upload_dir = '../../uploads/products/' . $id . '/';
                         
                         // Crear directorio si no existe
                         if (!file_exists($upload_dir)) {
-                            mkdir($upload_dir, 0777, true);
-                        }
-
-                        foreach ($_SESSION['temp_images'] as $image) {
-                            $temp_path = $image['temp_path'];
-                            $filename = $image['filename'];
-                            $is_principal = $image['is_principal'];
-                            
-                            if (file_exists($temp_path)) {
-                                $final_path = $upload_dir . $filename;
-                                
-                                // Si es la imagen principal, quitar la marca de principal de las otras
-                                if ($is_principal) {
-                                    $update_principal_sql = "UPDATE imagenes_producto SET principal = 0 WHERE producto_id = ?";
-                                    $update_principal_stmt = mysqli_prepare($conn, $update_principal_sql);
-                                    mysqli_stmt_bind_param($update_principal_stmt, "i", $id);
-                                    mysqli_stmt_execute($update_principal_stmt);
-                                }
-                                
-                                if (rename($temp_path, $final_path)) {
-                                    // Guardar referencia en la base de datos
-                                    $img_sql = "INSERT INTO imagenes_producto (producto_id, url, principal) VALUES (?, ?, ?)";
-                                    $img_stmt = mysqli_prepare($conn, $img_sql);
-                                    $relative_path = 'uploads/products/' . $id . '/' . $filename;
-                                    mysqli_stmt_bind_param($img_stmt, "isi", $id, $relative_path, $is_principal);
-                                    
-                                    if (!mysqli_stmt_execute($img_stmt)) {
-                                        $mensaje = "Error al guardar la referencia de la imagen en la base de datos";
-                                        $tipo_mensaje = "error";
-                                    }
-                                } else {
-                                    $mensaje = "Error al mover la imagen a su ubicación final";
-                                    $tipo_mensaje = "error";
-                                }
+                            if (!mkdir($upload_dir, 0777, true)) {
+                                $mensaje = "Error al crear el directorio para las imágenes";
+                                $tipo_mensaje = "error";
+                                break;
                             }
                         }
 
-                        // Limpiar directorio temporal y sesión
+                        // Verificar si ya existe una imagen principal
+                        $check_principal_sql = "SELECT COUNT(*) as count FROM imagenes_producto WHERE producto_id = ? AND principal = 1";
+                        $check_stmt = mysqli_prepare($conn, $check_principal_sql);
+                        mysqli_stmt_bind_param($check_stmt, "i", $id);
+                        mysqli_stmt_execute($check_stmt);
+                        $check_result = mysqli_stmt_get_result($check_stmt);
+                        $has_principal = mysqli_fetch_assoc($check_result)['count'] > 0;
+
+                        foreach ($_POST['temp_images'] as $image) {
+                            // Verificar que tenemos los datos necesarios
+                            if (!isset($image['temp_path']) || !isset($image['filename'])) {
+                                continue;
+                            }
+
+                            $temp_path = $image['temp_path'];
+                            $filename = $image['filename'];
+                            $is_principal = isset($image['is_principal']) && $image['is_principal'] == '1';
+                            
+                            // Verificar que el archivo temporal existe
+                            if (!file_exists($temp_path)) {
+                                $mensaje = "Error: Archivo temporal no encontrado - " . $filename;
+                                $tipo_mensaje = "error";
+                                continue;
+                            }
+
+                            // Si es la imagen principal, quitar la marca de principal de las otras
+                            if ($is_principal && !$has_principal) {
+                                $update_principal_sql = "UPDATE imagenes_producto SET principal = 0 WHERE producto_id = ?";
+                                $update_principal_stmt = mysqli_prepare($conn, $update_principal_sql);
+                                mysqli_stmt_bind_param($update_principal_stmt, "i", $id);
+                                mysqli_stmt_execute($update_principal_stmt);
+                                $has_principal = true;
+                            }
+                            
+                            // Mover la imagen a su ubicación final
+                            $final_path = $upload_dir . $filename;
+                            if (!rename($temp_path, $final_path)) {
+                                $mensaje = "Error al mover la imagen: " . $filename;
+                                $tipo_mensaje = "error";
+                                continue;
+                            }
+
+                            // Guardar referencia en la base de datos
+                            $relative_path = 'uploads/products/' . $id . '/' . $filename;
+                            $img_sql = "INSERT INTO imagenes_producto (producto_id, url, principal) VALUES (?, ?, ?)";
+                            $img_stmt = mysqli_prepare($conn, $img_sql);
+                            
+                            if (!$img_stmt) {
+                                $mensaje = "Error al preparar la consulta de imagen";
+                                $tipo_mensaje = "error";
+                                continue;
+                            }
+
+                            $principal_value = $is_principal ? 1 : 0;
+                            mysqli_stmt_bind_param($img_stmt, "isi", $id, $relative_path, $principal_value);
+                            
+                            if (!mysqli_stmt_execute($img_stmt)) {
+                                $mensaje = "Error al guardar la imagen en la base de datos: " . mysqli_error($conn);
+                                $tipo_mensaje = "error";
+                                continue;
+                            }
+                        }
+
+                        // Limpiar archivos temporales
                         $temp_dir = '../../uploads/temp/' . session_id() . '/';
                         if (file_exists($temp_dir)) {
                             array_map('unlink', glob($temp_dir . '*.*'));
                             rmdir($temp_dir);
                         }
-                        unset($_SESSION['temp_images']);
                     }
 
                     // Actualizar categorías del producto
@@ -396,22 +431,43 @@ $total_pages = ceil($total_products / $limit);
 if (isset($_GET['get_product'])) {
     $product_id = filter_var($_GET['get_product'], FILTER_SANITIZE_NUMBER_INT);
     
-    // Obtener datos básicos del producto y categorías
+    // Validar que el ID es válido
+    if (!$product_id || $product_id <= 0) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'ID de producto inválido']);
+        exit();
+    }
+    
+    // Obtener datos básicos del producto y categorías (sin filtro de activo para edición)
     $sql = "SELECT p.*, GROUP_CONCAT(c.nombre) as categorias FROM productos p 
             LEFT JOIN productos_categorias pc ON p.id = pc.producto_id
             LEFT JOIN categorias c ON pc.categoria_id = c.id
-            WHERE p.id = ? AND p.activo = TRUE
+            WHERE p.id = ?
             GROUP BY p.id";
     $stmt = mysqli_prepare($conn, $sql);
+    
+    if (!$stmt) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Error en la preparación de consulta: ' . mysqli_error($conn)]);
+        exit();
+    }
+    
     mysqli_stmt_bind_param($stmt, "i", $product_id);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     $product_data = mysqli_fetch_assoc($result);
 
+    if (!$product_data) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Producto no encontrado']);
+        exit();
+    }
+
     // Obtener imágenes del producto
-    if ($product_data) {
-        $img_sql = "SELECT id, url, principal FROM imagenes_producto WHERE producto_id = ? ORDER BY principal DESC, id ASC";
-        $img_stmt = mysqli_prepare($conn, $img_sql);
+    $img_sql = "SELECT id, url, principal FROM imagenes_producto WHERE producto_id = ? ORDER BY principal DESC, id ASC";
+    $img_stmt = mysqli_prepare($conn, $img_sql);
+    
+    if ($img_stmt) {
         mysqli_stmt_bind_param($img_stmt, "i", $product_id);
         mysqli_stmt_execute($img_stmt);
         $img_result = mysqli_stmt_get_result($img_stmt);
@@ -420,6 +476,9 @@ if (isset($_GET['get_product'])) {
         while ($img = mysqli_fetch_assoc($img_result)) {
             $product_data['imagenes'][] = $img;
         }
+    } else {
+        // Si falla la consulta de imágenes, al menos devolver el producto sin imágenes
+        $product_data['imagenes'] = [];
     }
 
     header('Content-Type: application/json');
@@ -883,30 +942,29 @@ if (isset($_GET['get_product'])) {
                             <label class="form-label">
                                 Imágenes del Producto <span class="required">*</span>
                             </label>
-                            <small class="form-hint">Formatos permitidos: JPG, PNG, JPEG. Máximo 5 imágenes</small>
+                            
+                            <!-- Estado de imágenes -->
+                            <div class="images-status" id="imageStatus">
+                                <span class="material-icons">photo_library</span>
+                                <span id="statusText">Sin imágenes seleccionadas</span>
+                            </div>
+                            
+                            <!-- Mensajes de validación -->
+                            <div id="validationErrors" class="validation-errors"></div>
                             
                             <div class="product-images-container">
-                                <!-- Área de drop -->
-                                <div class="drop-zone" id="uploadArea">
-                                    <span class="material-icons">cloud_upload</span>
-                                    <p>Arrastra y suelta imágenes aquí o</p>
-                                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('imageFiles').click()">
-                                        Haz clic para seleccionar archivos
-                                    </button>
-                                    <input type="file" id="imageFiles" multiple accept="image/*" style="display: none;">
-                                    <div class="upload-requirements">
-                                        <small class="form-hint">
-                                            <span class="material-icons">info</span>
-                                            Máximo 5 imágenes por producto • 500KB máximo por imagen • JPG/PNG • La primera imagen será la portada
-                                        </small>
+                                <!-- Lista de imágenes -->
+                                <div id="imagesList" class="images-list"></div>
+                                
+                                <!-- Zona de subida -->
+                                <div class="drop-zone" id="dropZone">
+                                    <div class="drop-zone-content">
+                                        <span class="material-icons">cloud_upload</span>
+                                        <p>Arrastra imágenes aquí o haz clic para seleccionar</p>
+                                        <p class="upload-info">JPG, PNG • Máximo 500KB • Hasta 5 imágenes</p>
+                                        <input type="file" id="fileInput" name="images[]" multiple accept="image/jpeg,image/png" style="display: none;">
                                     </div>
                                 </div>
-                                
-                                <!-- Lista de imágenes -->
-                                <div class="images-list" id="imagesList"></div>
-                                
-                                <!-- Contador de imágenes -->
-                                <div class="images-counter" id="imagesCounter"></div>
                             </div>
                         </div>
                     </div>
@@ -945,36 +1003,73 @@ if (isset($_GET['get_product'])) {
     </div>
 
     <script>
+        // Verificar que los elementos principales existen al cargar
+        document.addEventListener('DOMContentLoaded', function() {
+            const requiredElements = ['productModal', 'productForm'];
+            const missing = requiredElements.filter(id => !document.getElementById(id));
+            
+            if (missing.length > 0) {
+                console.error('Elementos principales faltantes:', missing);
+                alert(`Error crítico: Elementos faltantes: ${missing.join(', ')}`);
+                return;
+            }
+            
+            console.log('Todos los elementos principales cargados correctamente');
+        });
+
         const modal = document.getElementById('productModal');
         const productForm = document.getElementById('productForm');
         const uploadStatus = document.getElementById('uploadStatus');
         
         function closeModal() {
+            if (!modal) {
+                console.error('Modal no encontrado');
+                return;
+            }
+            
             modal.style.display = 'none';
-            productForm.reset();
+            
+            if (productForm) {
+                productForm.reset();
+            }
             
             // Limpiar URLs de preview para liberar memoria
-            currentImages.forEach(img => {
-                if (img.preview_url) {
-                    URL.revokeObjectURL(img.preview_url);
-                }
-            });
+            if (currentImages && Array.isArray(currentImages)) {
+                currentImages.forEach(img => {
+                    if (img.preview_url) {
+                        URL.revokeObjectURL(img.preview_url);
+                    }
+                });
+            }
             
             // Limpiar estado de imágenes
             currentImages = [];
             
             // Limpiar contenedores de imágenes
             const imagesList = document.getElementById('imagesList');
-            const imagesCounter = document.getElementById('imagesCounter');
             if (imagesList) imagesList.innerHTML = '';
-            if (imagesCounter) imagesCounter.innerHTML = '';
         }
 
         function openCreateModal() {
-            document.getElementById('modalTitle').innerHTML = '<span class="material-icons">add_circle</span> Insertar Nuevo Producto';
-            document.getElementById('formAction').value = 'create';
-            document.getElementById('submitBtn').innerHTML = '<span class="material-icons">save</span> Guardar Producto';
-            document.getElementById('productId').value = '';
+            // Verificar que los elementos básicos existen
+            const basicElements = {
+                modalTitle: document.getElementById('modalTitle'),
+                formAction: document.getElementById('formAction'),
+                submitBtn: document.getElementById('submitBtn'),
+                productId: document.getElementById('productId')
+            };
+
+            const missingBasicElements = Object.keys(basicElements).filter(key => !basicElements[key]);
+            if (missingBasicElements.length > 0) {
+                console.error(`Elementos faltantes en el DOM: ${missingBasicElements.join(', ')}`);
+                alert(`Error: Elementos faltantes en el modal: ${missingBasicElements.join(', ')}`);
+                return;
+            }
+
+            basicElements.modalTitle.innerHTML = '<span class="material-icons">add_circle</span> Insertar Nuevo Producto';
+            basicElements.formAction.value = 'create';
+            basicElements.submitBtn.innerHTML = '<span class="material-icons">save</span> Guardar Producto';
+            basicElements.productId.value = '';
             
             // Limpiar URLs de preview para liberar memoria
             currentImages.forEach(img => {
@@ -989,33 +1084,83 @@ if (isset($_GET['get_product'])) {
             
             // Limpiar contenedores de imágenes
             const imagesList = document.getElementById('imagesList');
-            const imagesCounter = document.getElementById('imagesCounter');
             if (imagesList) imagesList.innerHTML = '';
-            if (imagesCounter) imagesCounter.innerHTML = '';
             
             // Limpiar imágenes temporales del servidor
             clearTempImages();
+            
+            // Actualizar estado inicial
+            updateImageStatus();
             
             modal.style.display = 'block';
         }
 
         async function editProduct(id) {
             try {
+                console.log('Cargando producto ID:', id);
                 const response = await fetch(`?get_product=${id}`);
-                const productData = await response.json();
-
-                document.getElementById('modalTitle').innerHTML = '<span class="material-icons">edit</span> Editar Producto';
-                document.getElementById('formAction').value = 'update';
-                document.getElementById('submitBtn').innerHTML = '<span class="material-icons">save</span> Actualizar Producto';
                 
-                document.getElementById('productId').value = productData.id;
-                document.getElementById('nombre').value = productData.nombre;
-                document.getElementById('descripcion').value = productData.descripcion;
-                document.getElementById('precio').value = productData.precio;
-                document.getElementById('stock').value = productData.stock;
-                document.getElementById('materiales').value = productData.materiales || '';
-                document.getElementById('impacto_ambiental').value = productData.impacto_ambiental || '';
-                document.getElementById('activo').checked = productData.activo == 1;
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const responseText = await response.text();
+                console.log('Response text:', responseText);
+                
+                let productData;
+                try {
+                    productData = JSON.parse(responseText);
+                } catch (jsonError) {
+                    console.error('Error parsing JSON:', jsonError);
+                    throw new Error('Respuesta del servidor no es válida');
+                }
+
+                console.log('Product data:', productData);
+
+                // Verificar si hay error en la respuesta del servidor
+                if (productData.error) {
+                    throw new Error(`Error del servidor: ${productData.error}`);
+                }
+
+                if (!productData || !productData.id) {
+                    throw new Error('Producto no encontrado o datos incompletos');
+                }
+
+                // Verificar que todos los elementos existen antes de modificarlos
+                const elements = {
+                    modalTitle: document.getElementById('modalTitle'),
+                    formAction: document.getElementById('formAction'),
+                    submitBtn: document.getElementById('submitBtn'),
+                    productId: document.getElementById('productId'),
+                    nombre: document.getElementById('nombre'),
+                    descripcion: document.getElementById('descripcion'),
+                    precio: document.getElementById('precio'),
+                    stock: document.getElementById('stock'),
+                    materiales: document.getElementById('materiales'),
+                    impacto_ambiental: document.getElementById('impacto_ambiental'),
+                    activo: document.getElementById('activo')
+                };
+
+                // Verificar que todos los elementos existen
+                const missingElements = Object.keys(elements).filter(key => !elements[key]);
+                if (missingElements.length > 0) {
+                    throw new Error(`Elementos faltantes en el DOM: ${missingElements.join(', ')}`);
+                }
+
+                elements.modalTitle.innerHTML = '<span class="material-icons">edit</span> Editar Producto';
+                elements.formAction.value = 'update';
+                elements.submitBtn.innerHTML = '<span class="material-icons">save</span> Actualizar Producto';
+                
+                elements.productId.value = productData.id;
+                elements.nombre.value = productData.nombre || '';
+                elements.descripcion.value = productData.descripcion || '';
+                elements.precio.value = productData.precio || '';
+                elements.stock.value = productData.stock || '';
+                elements.materiales.value = productData.materiales || '';
+                elements.impacto_ambiental.value = productData.impacto_ambiental || '';
+                elements.activo.checked = productData.activo == 1;
 
                 // Marcar categorías
                 const categorias = productData.categorias ? productData.categorias.split(',') : [];
@@ -1025,10 +1170,10 @@ if (isset($_GET['get_product'])) {
 
                 // Cargar imágenes existentes del producto
                 currentImages = [];
-                window.imagesToDelete = []; // Resetear lista de eliminación
+                window.imagesToDelete = [];
                 
-                if (productData.imagenes && productData.imagenes.length > 0) {
-                    currentImages = productData.imagenes.map((imagen, index) => {
+                if (productData.imagenes && Array.isArray(productData.imagenes) && productData.imagenes.length > 0) {
+                    currentImages = productData.imagenes.map((imagen) => {
                         return {
                             id: imagen.id,
                             filename: imagen.url.split('/').pop(),
@@ -1040,12 +1185,16 @@ if (isset($_GET['get_product'])) {
                     });
                 }
 
+                console.log('Current images:', currentImages);
+
                 // Actualizar display de imágenes
                 updateImageDisplay();
+                updateImageStatus();
 
                 modal.style.display = 'block';
             } catch (error) {
-                alert('Error al cargar los datos del producto');
+                console.error('Error completo:', error);
+                alert(`Error al cargar los datos del producto: ${error.message}`);
             }
         }
 
@@ -1101,85 +1250,146 @@ if (isset($_GET['get_product'])) {
         }
 
         // Gestión de imágenes y validación de formulario
-        const uploadArea = document.getElementById('uploadArea');
-        const imageFiles = document.getElementById('imageFiles');
 
-        uploadArea.addEventListener('dragover', (e) => {
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
-            uploadArea.classList.add('dragover');
+            dropZone.classList.add('dragover');
         });
 
-        uploadArea.addEventListener('dragleave', (e) => {
+        dropZone.addEventListener('dragleave', (e) => {
             e.preventDefault();
-            uploadArea.classList.remove('dragover');
+            dropZone.classList.remove('dragover');
         });
 
-        uploadArea.addEventListener('drop', (e) => {
+        dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
-            uploadArea.classList.remove('dragover');
+            dropZone.classList.remove('dragover');
             handleFiles(e.dataTransfer.files);
         });
 
-        imageFiles.addEventListener('change', (e) => {
+        fileInput.addEventListener('change', (e) => {
             handleFiles(e.target.files);
+        });
+
+        dropZone.addEventListener('click', (e) => {
+            if (!dropZone.classList.contains('hidden')) {
+                fileInput.click();
+            }
         });
 
         // Array para mantener el estado de las imágenes subidas
         let currentImages = [];
 
+        // Función para actualizar el estado de las imágenes
+        function updateImageStatus() {
+            const statusElement = document.getElementById('statusText');
+            const dropZone = document.getElementById('dropZone');
+            const count = currentImages.length;
+            
+            if (count === 0) {
+                statusElement.textContent = 'Sin imágenes seleccionadas';
+                dropZone.classList.remove('hidden');
+            } else if (count === 5) {
+                statusElement.textContent = `${count} imágenes (límite alcanzado)`;
+                dropZone.classList.add('hidden');
+            } else {
+                const principal = currentImages.find(img => img.is_principal);
+                const principalText = principal ? ' • 1 principal' : '';
+                statusElement.textContent = `${count} imagen${count !== 1 ? 'es' : ''}${principalText} • ${5 - count} restante${5 - count !== 1 ? 's' : ''}`;
+                dropZone.classList.remove('hidden');
+            }
+        }
+
+        // Función para mostrar errores de validación
+        function showValidationError(message, isSuccess = false) {
+            const errorsDiv = document.getElementById('validationErrors');
+            const dropZone = document.getElementById('dropZone');
+            
+            // Limpiar clases anteriores
+            errorsDiv.className = 'validation-errors';
+            dropZone.classList.remove('error', 'success');
+            
+            // Agregar nuevas clases
+            errorsDiv.classList.add('show', isSuccess ? 'success' : 'error');
+            dropZone.classList.add(isSuccess ? 'success' : 'error');
+            
+            // Actualizar mensaje
+            errorsDiv.textContent = message;
+            
+            setTimeout(() => {
+                errorsDiv.classList.remove('show');
+                dropZone.classList.remove('error', 'success');
+            }, 3000);
+        }
+
         function handleFiles(files) {
-            // Verificar límite total de imágenes (máximo 5 por producto)
+            if (!files || files.length === 0) {
+                showValidationError('❌ Por favor, selecciona al menos una imagen', false);
+                return;
+            }
+
+            // Validar límite de imágenes
             const totalAfterUpload = currentImages.length + files.length;
             if (totalAfterUpload > 5) {
-                showUploadStatus(`Error: Máximo 5 imágenes por producto. Actualmente tienes ${currentImages.length}, intentas subir ${files.length}`, 'error');
+                showValidationError(`❌ Límite excedido: intentas subir ${files.length} imagen(es) pero solo puedes tener ${5 - currentImages.length} más`, false);
                 return;
             }
 
-            // Validar archivos antes de subir
             let validFiles = [];
-            Array.from(files).forEach((file, index) => {
-                if (!file.type.startsWith('image/')) {
-                    showUploadStatus('Error: Solo se permiten imágenes (JPG, PNG)', 'error');
-                    return;
-                }
+            let errors = [];
 
-                // Validar tamaño según documentación técnica (500KB máximo)
-                if (file.size > 500 * 1024) {
-                    showUploadStatus(`Error: "${file.name}" excede el límite de 500KB`, 'error');
-                    return;
-                }
+            // Validar cada archivo
+            Array.from(files).forEach((file) => {
+                const allowedTypes = ['image/jpeg', 'image/png'];
+                const extension = file.name.toLowerCase().split('.').pop();
+                const isTypeValid = allowedTypes.includes(file.type) && ['jpg', 'jpeg', 'png'].includes(extension);
+                const isSizeValid = file.size <= 500 * 1024 && file.size >= 1024;
 
-                validFiles.push(file);
+                if (!isTypeValid) {
+                    errors.push(`"${file.name}": Solo se permiten archivos JPG y PNG`);
+                } else if (!isSizeValid) {
+                    const sizeKB = Math.round(file.size / 1024);
+                    errors.push(`"${file.name}": ${sizeKB}KB (máximo 500KB)`);
+                } else {
+                    validFiles.push(file);
+                }
             });
 
-            if (validFiles.length === 0) {
+            if (errors.length > 0) {
+                showValidationError(`❌ ${errors.join(', ')}`, false);
                 return;
             }
 
-            // Crear previews inmediatas de las imágenes
-            let previewImages = [];
+            if (validFiles.length === 0) {
+                showValidationError('❌ No hay archivos válidos para subir', false);
+                return;
+            }
+
+            // Crear previews inmediatas
             validFiles.forEach((file, index) => {
-                const preview = {
+                const imageData = {
                     id: 'temp_' + Date.now() + '_' + index,
                     filename: file.name,
                     original_name: file.name,
-                    is_principal: (currentImages.length === 0 && index === 0), // Solo la primera si no hay otras
+                    is_principal: currentImages.length === 0 && index === 0, // Solo la primera imagen si no hay otras
                     is_existing: false,
-                    preview_url: URL.createObjectURL(file), // URL temporal para preview
-                    file: file // Mantener referencia al archivo
+                    preview_url: URL.createObjectURL(file),
+                    temp_path: null, // Se llenará cuando se suba al servidor
+                    file: file
                 };
-                previewImages.push(preview);
+                currentImages.push(imageData);
             });
 
-            // Agregar las previews al estado actual inmediatamente
-            currentImages = [...currentImages, ...previewImages];
             updateImageDisplay();
+            updateImageStatus();
+            fileInput.value = '';
 
-            // Subir silenciosamente en segundo plano
+            // Subir archivos al servidor
             const formData = new FormData();
-            validFiles.forEach(file => {
-                formData.append('images[]', file);
-            });
+            validFiles.forEach(file => formData.append('images[]', file));
 
             fetch('upload_image.php', {
                 method: 'POST',
@@ -1188,46 +1398,45 @@ if (isset($_GET['get_product'])) {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Actualizar silenciosamente los datos del servidor
+                    // Actualizar datos del servidor
                     data.files.forEach((serverFile, index) => {
-                        const previewIndex = currentImages.findIndex(img => 
-                            img.id === previewImages[index].id
-                        );
-                        if (previewIndex !== -1) {
-                            // Mantener la URL de preview pero actualizar los demás datos
-                            currentImages[previewIndex] = {
-                                ...serverFile,
-                                preview_url: currentImages[previewIndex].preview_url,
-                                is_principal: currentImages[previewIndex].is_principal,
-                                is_existing: false
-                            };
+                        const localIndex = currentImages.length - validFiles.length + index;
+                        if (currentImages[localIndex]) {
+                            currentImages[localIndex].temp_path = serverFile.temp_path;
+                            currentImages[localIndex].id = serverFile.id;
                         }
                     });
+                    
+                    showValidationError(`✅ ${data.files.length} imagen(es) subidas correctamente`, true);
                 } else {
-                    // Si falla, mostrar error pero mantener las imágenes
-                    showUploadStatus('Error al procesar las imágenes en el servidor', 'error');
+                    // Remover imágenes que fallaron
+                    currentImages = currentImages.slice(0, -validFiles.length);
+                    updateImageDisplay();
+                    updateImageStatus();
+                    showValidationError(`❌ Error: ${data.error}`, false);
                 }
             })
             .catch(error => {
-                showUploadStatus('Error al procesar las imágenes', 'error');
-                console.error('Error:', error);
+                currentImages = currentImages.slice(0, -validFiles.length);
+                updateImageDisplay();
+                updateImageStatus();
+                showValidationError('❌ Error de conexión', false);
             });
         }
 
         function updateImageDisplay() {
             const imagesList = document.getElementById('imagesList');
-            const imagesCounter = document.getElementById('imagesCounter');
             
-            // Limpiar contenedores
+            // Verificar que el elemento existe
+            if (!imagesList) {
+                console.error('Element imagesList not found');
+                return;
+            }
+            
+            // Limpiar contenedor de imágenes
             imagesList.innerHTML = '';
-            imagesCounter.innerHTML = '';
             
             if (currentImages.length > 0) {
-                // Actualizar contador
-                const existingCount = currentImages.filter(img => img.is_existing).length;
-                const newCount = currentImages.filter(img => !img.is_existing).length;
-                imagesCounter.textContent = `Total: ${currentImages.length} imagen(es)${existingCount > 0 ? ` (${existingCount} existente${existingCount > 1 ? 's' : ''})` : ''}${newCount > 0 ? ` (${newCount} nueva${newCount > 1 ? 's' : ''})` : ''}`;
-                
                 // Crear items de imagen
                 currentImages.forEach((file, index) => {
                     const itemDiv = document.createElement('div');
@@ -1249,7 +1458,21 @@ if (isset($_GET['get_product'])) {
                     
                     // Crear y agregar la imagen
                     const img = document.createElement('img');
-                    img.src = imageUrl || ''; // Si no hay URL, se mostrará el error
+                    // Si es una imagen existente o tiene URL del servidor, usar esa URL
+                    if (file.is_existing && file.url) {
+                        img.src = file.url.startsWith('uploads/') ? 
+                            '../../' + file.url : 
+                            '../../uploads/products/' + (document.getElementById('productId').value || 'temp') + '/' + file.url;
+                    } 
+                    // Si es una preview temporal, usar la URL de preview
+                    else if (file.preview_url) {
+                        img.src = file.preview_url;
+                    }
+                    // Si tiene URL temporal del servidor
+                    else if (file.temp_path) {
+                        img.src = '../../' + file.temp_path.replace('../../', '');
+                    }
+                    
                     img.alt = 'Vista previa';
                     img.onerror = function() {
                         this.style.display = 'none';
@@ -1363,6 +1586,7 @@ if (isset($_GET['get_product'])) {
                 }
                 
                 updateImageDisplay();
+                updateImageStatus();
             }
         }
 
@@ -1406,11 +1630,22 @@ if (isset($_GET['get_product'])) {
                 uploadStatus.textContent = message;
                 uploadStatus.className = 'upload-status ' + type;
                 
-                if (type === 'success' || type === 'error') {
+                // Auto-ocultar después de un tiempo (más tiempo para warnings debido a más texto)
+                if (type === 'success') {
                     setTimeout(() => {
                         uploadStatus.textContent = '';
                         uploadStatus.className = 'upload-status';
                     }, 3000);
+                } else if (type === 'warning') {
+                    setTimeout(() => {
+                        uploadStatus.textContent = '';
+                        uploadStatus.className = 'upload-status';
+                    }, 6000); // Más tiempo para leer warnings
+                } else if (type === 'error') {
+                    setTimeout(() => {
+                        uploadStatus.textContent = '';
+                        uploadStatus.className = 'upload-status';
+                    }, 5000); // Más tiempo para leer errores
                 }
             }
         }
@@ -1467,9 +1702,8 @@ if (isset($_GET['get_product'])) {
         function addImageDataToForm() {
             const form = document.getElementById('productForm');
             
-            // Limpiar campos previos
-            const prevFields = form.querySelectorAll('.dynamic-image-field');
-            prevFields.forEach(field => field.remove());
+            // Limpiar campos de imágenes previos
+            form.querySelectorAll('.dynamic-image-field').forEach(field => field.remove());
             
             // Agregar imágenes a eliminar
             if (window.imagesToDelete && window.imagesToDelete.length > 0) {
@@ -1483,7 +1717,7 @@ if (isset($_GET['get_product'])) {
                 });
             }
             
-            // Agregar información de imagen principal de las existentes
+            // Agregar imagen principal existente
             const existingPrincipal = currentImages.find(img => img.is_existing && img.is_principal);
             if (existingPrincipal) {
                 const input = document.createElement('input');
@@ -1493,6 +1727,36 @@ if (isset($_GET['get_product'])) {
                 input.className = 'dynamic-image-field';
                 form.appendChild(input);
             }
+
+            // Agregar imágenes temporales (nuevas)
+            const tempImages = currentImages.filter(img => !img.is_existing && img.temp_path);
+            tempImages.forEach((img, index) => {
+                // temp_path
+                const pathInput = document.createElement('input');
+                pathInput.type = 'hidden';
+                pathInput.name = `temp_images[${index}][temp_path]`;
+                pathInput.value = img.temp_path;
+                pathInput.className = 'dynamic-image-field';
+                form.appendChild(pathInput);
+
+                // filename
+                const nameInput = document.createElement('input');
+                nameInput.type = 'hidden';
+                nameInput.name = `temp_images[${index}][filename]`;
+                nameInput.value = img.filename;
+                nameInput.className = 'dynamic-image-field';
+                form.appendChild(nameInput);
+
+                // is_principal
+                const principalInput = document.createElement('input');
+                principalInput.type = 'hidden';
+                principalInput.name = `temp_images[${index}][is_principal]`;
+                principalInput.value = img.is_principal ? '1' : '0';
+                principalInput.className = 'dynamic-image-field';
+                form.appendChild(principalInput);
+            });
+
+            console.log('Imágenes temporales a enviar:', tempImages.length);
         }
 
         function removeImage(index) {
