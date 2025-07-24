@@ -5,8 +5,11 @@ function connection() {
     $password = "";
     $database = "greenfashion";
 
-    $connect = mysqli_connect($server, $user, $password, $database);
-
+    try {
+        $connect = mysqli_connect($server, $user, $password, $database);
+    } catch (mysqli_sql_exception) {
+        die("No se pudo conectar a la base de datos. Revisa las variables de conexión.");
+    }
     return $connect;
 }
 ?>
