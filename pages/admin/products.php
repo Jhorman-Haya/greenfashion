@@ -16,7 +16,6 @@ function sanitizeInput($data) {
 $mensaje = '';
 $tipo_mensaje = '';
 
-// Manejar mensajes de éxito desde redirecciones
 if (isset($_GET['success'])) {
     switch ($_GET['success']) {
         case 'created':
@@ -673,7 +672,7 @@ if (isset($_GET['get_product'])) {
                         <tbody>
                             <?php if (mysqli_num_rows($productos) > 0): ?>
                                 <?php while ($product = mysqli_fetch_assoc($productos)): ?>
-                                    <tr>
+                                    <tr class="product-row" onclick="showProductDetail(<?php echo $product['id']; ?>)" style="cursor: pointer;">
                                         <td>
                                             <div class="product-info">
                                                 <div class="product-image">
@@ -713,7 +712,7 @@ if (isset($_GET['get_product'])) {
                                         </td>
                                         <td><?php echo date('d/m/Y', strtotime($product['fecha_creacion'])); ?></td>
                                         <td>
-                                            <div class="action-buttons">
+                                            <div class="action-buttons" onclick="event.stopPropagation();">
                                                 <button class="btn-action btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)" title="Editar">
                                                     <span class="material-icons">edit</span>
                                                 </button>
@@ -776,6 +775,65 @@ if (isset($_GET['get_product'])) {
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Modal para Detalle del Producto -->
+    <div id="productDetailModal" class="modal">
+        <div class="modal-content product-detail-modal">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <span class="material-icons">visibility</span>
+                    Detalle del Producto
+                </h2>
+                <button class="close" onclick="closeDetailModal()" type="button">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div id="productDetailContent">
+                    <!-- El contenido se cargará dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Vista Ampliada de Imagen -->
+    <div id="imageViewerModal" class="modal image-viewer-modal">
+        <div class="modal-content image-viewer-content">
+            <div class="image-viewer-header">
+                <div class="image-viewer-title">
+                    <span class="material-icons">zoom_in</span>
+                    Vista Ampliada
+                </div>
+                <button class="close" onclick="closeImageViewer()" type="button">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            
+            <div class="image-viewer-body">
+                <div class="image-viewer-container">
+                    <div class="image-viewer-slider" id="imageViewerSlider">
+                        <!-- Las imágenes se cargarán dinámicamente -->
+                    </div>
+                    
+                    <!-- Controles del viewer -->
+                    <div class="viewer-controls">
+                        <button class="viewer-btn" id="viewerPrevBtn" onclick="changeViewerSlide(-1)">
+                            <span class="material-icons">chevron_left</span>
+                        </button>
+                        <button class="viewer-btn" id="viewerNextBtn" onclick="changeViewerSlide(1)">
+                            <span class="material-icons">chevron_right</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Indicadores del viewer -->
+                    <div class="viewer-indicators" id="viewerIndicators">
+                        <!-- Los indicadores se cargarán dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Modal para Crear/Editar Producto -->
@@ -1808,6 +1866,449 @@ if (isset($_GET['get_product'])) {
                 console.log('Error limpiando imágenes temporales:', error);
             });
         }
+
+        // Funciones para el modal de detalle del producto
+        const detailModal = document.getElementById('productDetailModal');
+        const detailContent = document.getElementById('productDetailContent');
+
+        function showProductDetail(productId) {
+            // Mostrar loading
+            detailContent.innerHTML = `
+                <div class="loading-container">
+                    <span class="material-icons loading-icon">hourglass_empty</span>
+                    <p>Cargando detalles del producto...</p>
+                </div>
+            `;
+            detailModal.style.display = 'block';
+
+            // Hacer petición AJAX para obtener los datos del producto
+            fetch(`get_product_detail.php?id=${productId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(errorData => {
+                            throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        displayProductDetail(data.producto);
+                    } else {
+                        throw new Error(data.error || 'Error al cargar el producto');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error en showProductDetail:', error);
+                    detailContent.innerHTML = `
+                        <div class="error-container">
+                            <span class="material-icons error-icon">error</span>
+                            <p>Error al cargar los detalles del producto</p>
+                            <small>${error.message}</small>
+                            <br><br>
+                            <button onclick="showProductDetail(${productId})" class="btn btn-secondary">
+                                <span class="material-icons">refresh</span>
+                                Reintentar
+                            </button>
+                        </div>
+                    `;
+                });
+        }
+
+        // Función para formatear el precio en formato $45,000.00
+        function formatPrecio(precio) {
+            return '$' + Number(precio).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function displayProductDetail(producto) {
+            const categoriasHTML = producto.categorias.length > 0 
+                ? producto.categorias.map(cat => `<span class="category-badge">${cat}</span>`).join('')
+                : '<span class="text-muted">Sin categoría</span>';
+
+            // Generar HTML del slider
+            let sliderHTML = '';
+            if (producto.imagenes.length > 0) {
+                const slidesHTML = producto.imagenes.map((img, index) => `
+                    <div class="slide" data-index="${index}" onclick="openImageViewer(${index})">
+                        <img src="${img.url}" alt="${producto.nombre}" onerror="this.style.display='none'">
+                        ${img.principal ? '<div class="principal-star"><span class="material-icons">star</span></div>' : ''}
+                    </div>
+                `).join('');
+
+                const indicatorsHTML = producto.imagenes.map((_, index) => `
+                    <div class="indicator ${index === 0 ? 'active' : ''}" data-index="${index}"></div>
+                `).join('');
+
+                sliderHTML = `
+                    <div class="image-slider-container">
+                        <div class="image-slider" id="imageSlider">
+                            ${slidesHTML}
+                        </div>
+                        
+                        <!-- Controles del slider -->
+                        <div class="slider-controls">
+                            <button class="slider-btn" id="prevBtn" onclick="changeSlide(-1)">
+                                <span class="material-icons">chevron_left</span>
+                            </button>
+                            <button class="slider-btn" id="nextBtn" onclick="changeSlide(1)">
+                                <span class="material-icons">chevron_right</span>
+                            </button>
+                        </div>
+                        
+                        <!-- Indicadores -->
+                        <div class="slider-indicators">
+                            ${indicatorsHTML}
+                        </div>
+                    </div>
+                `;
+            } else {
+                sliderHTML = '<div class="no-images"><span class="material-icons">image_not_supported</span><p>Sin imágenes</p></div>';
+            }
+
+            detailContent.innerHTML = `
+                <div class="product-detail-container">
+                    <!-- Header compacto -->
+                    <div class="product-detail-header">
+                        <h3 class="product-title">${producto.nombre}</h3>
+                        <div class="product-status">
+                            <span class="status-badge">
+                                ${producto.activo ? 'Activo' : 'Inactivo'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Contenido principal -->
+                    <div class="product-detail-content">
+                        <!-- Galería con slider -->
+                        <div class="product-images-gallery">
+                            <div class="gallery-title">
+                                <span class="material-icons">photo_library</span>
+                                Imágenes
+                            </div>
+                            ${sliderHTML}
+                        </div>
+
+                        <!-- Información compacta -->
+                        <div class="product-detail-info">
+                            <!-- Metadatos compactos -->
+                            <div class="product-meta-section">
+                                <div class="meta-item">
+                                    <span class="meta-label">Precio</span>
+                                    <span class="meta-value price">${formatPrecio(producto.precio)}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Stock</span>
+                                    <span class="meta-value stock-badge ${producto.stock > 0 ? 'stock-available' : 'stock-empty'}">
+                                        ${producto.stock}
+                                    </span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Fecha</span>
+                                    <span class="meta-value">${new Date(producto.fecha_creacion).toLocaleDateString('es-ES')}</span>
+                                </div>
+                            </div>
+
+                            <!-- Categorías compactas -->
+                            <div class="product-categories">
+                                <div class="categories-title">
+                                    <span class="material-icons">category</span>
+                                    Categorías
+                                </div>
+                                <div class="categories-container">
+                                    ${categoriasHTML}
+                                </div>
+                            </div>
+
+                            <!-- Descripción compacta -->
+                            <div class="product-description">
+                                <div class="description-title">
+                                    <span class="material-icons">description</span>
+                                    Descripción
+                                </div>
+                                <p class="description-text">${producto.descripcion}</p>
+                            </div>
+
+                            <!-- Sostenibilidad compacta -->
+                            <div class="product-sustainability">
+                                <div class="sustainability-section">
+                                    <div class="sustainability-section-title">Materiales</div>
+                                    <p class="sustainability-text">${producto.materiales}</p>
+                                </div>
+                                <div class="sustainability-section">
+                                    <div class="sustainability-section-title">Impacto Ambiental</div>
+                                    <p class="sustainability-text">${producto.impacto_ambiental}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Inicializar el slider si hay imágenes
+            if (producto.imagenes.length > 1) {
+                initializeSlider();
+            }
+        }
+
+        function closeDetailModal() {
+            detailModal.style.display = 'none';
+            detailContent.innerHTML = '';
+        }
+
+        // Cerrar modal de detalle al hacer clic fuera
+        window.addEventListener('click', function(event) {
+            if (event.target === detailModal) {
+                closeDetailModal();
+            }
+        });
+
+        // Variables globales para el slider
+        let currentSlide = 0;
+        let slideInterval;
+        let totalSlides = 0;
+
+        // Función para inicializar el slider
+        function initializeSlider() {
+            const slider = document.getElementById('imageSlider');
+            const indicators = document.querySelectorAll('.indicator');
+            
+            if (!slider || indicators.length === 0) return;
+            
+            totalSlides = indicators.length;
+            currentSlide = 0;
+            
+            // Configurar indicadores clickeables
+            indicators.forEach((indicator, index) => {
+                indicator.addEventListener('click', () => {
+                    goToSlide(index);
+                });
+            });
+            
+            // Iniciar auto-slide
+            startAutoSlide();
+            
+            // Pausar auto-slide al hacer hover
+            const sliderContainer = document.querySelector('.image-slider-container');
+            if (sliderContainer) {
+                sliderContainer.addEventListener('mouseenter', pauseAutoSlide);
+                sliderContainer.addEventListener('mouseleave', startAutoSlide);
+            }
+        }
+
+        // Función para cambiar slide
+        function changeSlide(direction) {
+            const newSlide = currentSlide + direction;
+            
+            if (newSlide < 0) {
+                goToSlide(totalSlides - 1);
+            } else if (newSlide >= totalSlides) {
+                goToSlide(0);
+            } else {
+                goToSlide(newSlide);
+            }
+        }
+
+        // Función para ir a un slide específico
+        function goToSlide(index) {
+            const slider = document.getElementById('imageSlider');
+            const indicators = document.querySelectorAll('.indicator');
+            
+            if (!slider || index < 0 || index >= totalSlides) return;
+            
+            currentSlide = index;
+            
+            // Actualizar posición del slider
+            slider.style.transform = `translateX(-${index * 100}%)`;
+            
+            // Actualizar indicadores
+            indicators.forEach((indicator, i) => {
+                indicator.classList.toggle('active', i === index);
+            });
+            
+            // Actualizar estado de los botones
+            updateSliderButtons();
+            
+            // Reiniciar auto-slide
+            restartAutoSlide();
+        }
+
+        // Función para actualizar estado de los botones
+        function updateSliderButtons() {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            
+            if (prevBtn) prevBtn.disabled = false;
+            if (nextBtn) nextBtn.disabled = false;
+        }
+
+        // Función para iniciar auto-slide
+        function startAutoSlide() {
+            if (totalSlides <= 1) return;
+            
+            slideInterval = setInterval(() => {
+                changeSlide(1);
+            }, 3000); // Cambiar cada 3 segundos
+        }
+
+        // Función para pausar auto-slide
+        function pauseAutoSlide() {
+            if (slideInterval) {
+                clearInterval(slideInterval);
+                slideInterval = null;
+            }
+        }
+
+        // Función para reiniciar auto-slide
+        function restartAutoSlide() {
+            pauseAutoSlide();
+            startAutoSlide();
+        }
+
+        // Limpiar intervalos al cerrar el modal
+        function closeDetailModal() {
+            pauseAutoSlide();
+            detailModal.style.display = 'none';
+            detailContent.innerHTML = '';
+            currentSlide = 0;
+            totalSlides = 0;
+        }
+
+        // Variables globales para el viewer de imágenes
+        let currentViewerSlide = 0;
+        let totalViewerSlides = 0;
+        let currentProductImages = [];
+
+        // Función para abrir el viewer de imágenes
+        function openImageViewer(startIndex = 0) {
+            const imageViewerModal = document.getElementById('imageViewerModal');
+            const imageViewerSlider = document.getElementById('imageViewerSlider');
+            const viewerIndicators = document.getElementById('viewerIndicators');
+            
+            if (!imageViewerModal || !imageViewerSlider) return;
+            
+            // Obtener las imágenes del producto actual
+            currentProductImages = Array.from(document.querySelectorAll('.slide img')).map(img => ({
+                src: img.src,
+                alt: img.alt,
+                isPrincipal: img.parentElement.querySelector('.principal-star') !== null
+            }));
+            
+            if (currentProductImages.length === 0) return;
+            
+            totalViewerSlides = currentProductImages.length;
+            currentViewerSlide = startIndex;
+            
+            // Generar HTML del slider del viewer
+            const viewerSlidesHTML = currentProductImages.map((img, index) => `
+                <div class="viewer-slide" data-index="${index}">
+                    <img src="${img.src}" alt="${img.alt}">
+                    ${img.isPrincipal ? '<div class="viewer-principal-star"><span class="material-icons">star</span></div>' : ''}
+                </div>
+            `).join('');
+            
+            // Generar indicadores del viewer
+            const viewerIndicatorsHTML = currentProductImages.map((_, index) => `
+                <div class="viewer-indicator ${index === startIndex ? 'active' : ''}" data-index="${index}"></div>
+            `).join('');
+            
+            imageViewerSlider.innerHTML = viewerSlidesHTML;
+            viewerIndicators.innerHTML = viewerIndicatorsHTML;
+            
+            // Configurar indicadores clickeables
+            const indicators = viewerIndicators.querySelectorAll('.viewer-indicator');
+            indicators.forEach((indicator, index) => {
+                indicator.addEventListener('click', () => {
+                    goToViewerSlide(index);
+                });
+            });
+            
+            // Mostrar el modal y ir al slide inicial
+            imageViewerModal.classList.add('active');
+            goToViewerSlide(startIndex);
+            
+            // Configurar navegación con teclado
+            document.addEventListener('keydown', handleViewerKeydown);
+        }
+
+        // Función para cerrar el viewer
+        function closeImageViewer() {
+            const imageViewerModal = document.getElementById('imageViewerModal');
+            if (imageViewerModal) {
+                imageViewerModal.classList.remove('active');
+            }
+            
+            // Remover event listener del teclado
+            document.removeEventListener('keydown', handleViewerKeydown);
+        }
+
+        // Función para cambiar slide en el viewer
+        function changeViewerSlide(direction) {
+            const newSlide = currentViewerSlide + direction;
+            
+            if (newSlide < 0) {
+                goToViewerSlide(totalViewerSlides - 1);
+            } else if (newSlide >= totalViewerSlides) {
+                goToViewerSlide(0);
+            } else {
+                goToViewerSlide(newSlide);
+            }
+        }
+
+        // Función para ir a un slide específico en el viewer
+        function goToViewerSlide(index) {
+            const imageViewerSlider = document.getElementById('imageViewerSlider');
+            const indicators = document.querySelectorAll('.viewer-indicator');
+            
+            if (!imageViewerSlider || index < 0 || index >= totalViewerSlides) return;
+            
+            currentViewerSlide = index;
+            
+            // Actualizar posición del slider
+            imageViewerSlider.style.transform = `translateX(-${index * 100}%)`;
+            
+            // Actualizar indicadores
+            indicators.forEach((indicator, i) => {
+                indicator.classList.toggle('active', i === index);
+            });
+            
+            // Actualizar estado de los botones
+            updateViewerButtons();
+        }
+
+        // Función para actualizar estado de los botones del viewer
+        function updateViewerButtons() {
+            const prevBtn = document.getElementById('viewerPrevBtn');
+            const nextBtn = document.getElementById('viewerNextBtn');
+            
+            if (prevBtn) prevBtn.disabled = false;
+            if (nextBtn) nextBtn.disabled = false;
+        }
+
+        // Función para manejar navegación con teclado
+        function handleViewerKeydown(event) {
+            switch (event.key) {
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    changeViewerSlide(-1);
+                    break;
+                case 'ArrowRight':
+                    event.preventDefault();
+                    changeViewerSlide(1);
+                    break;
+                case 'Escape':
+                    event.preventDefault();
+                    closeImageViewer();
+                    break;
+            }
+        }
+
+        // Cerrar viewer al hacer clic fuera
+        window.addEventListener('click', function(event) {
+            const imageViewerModal = document.getElementById('imageViewerModal');
+            if (event.target === imageViewerModal) {
+                closeImageViewer();
+            }
+        });
     </script>
 </body>
 </html> 
